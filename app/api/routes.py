@@ -2,10 +2,9 @@
 
 from __future__ import annotations
 
-import asyncio
 from uuid import uuid4
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, HTTPException, status
 
 from app.models.schemas import ApprovalRequest, TaskCreateRequest, TaskResponse, TaskStatus, utc_now
 from app.services.workflow import process_task_pipeline
@@ -29,7 +28,7 @@ def get_task_or_404(task_id: str) -> TaskResponse:
 
 
 @router.post("/", response_model=TaskResponse, status_code=status.HTTP_201_CREATED)
-async def create_task(payload: TaskCreateRequest) -> TaskResponse:
+async def create_task(payload: TaskCreateRequest, background_tasks: BackgroundTasks) -> TaskResponse:
     """创建任务并将其初始化为计划中状态。"""
 
     now = utc_now()
@@ -41,7 +40,7 @@ async def create_task(payload: TaskCreateRequest) -> TaskResponse:
         updated_at=now,
     )
     fake_db[task.task_id] = task
-    asyncio.create_task(process_task_pipeline(task.task_id))
+    background_tasks.add_task(process_task_pipeline, task.task_id)
     return task
 
 
@@ -53,7 +52,11 @@ async def get_task(task_id: str) -> TaskResponse:
 
 
 @router.post("/{task_id}/approve", response_model=TaskResponse)
-async def approve_task(task_id: str, payload: ApprovalRequest) -> TaskResponse:
+async def approve_task(
+    task_id: str,
+    payload: ApprovalRequest,
+    background_tasks: BackgroundTasks,
+) -> TaskResponse:
     """处理人工审批结果，并驱动任务进入下一状态。"""
 
     task = get_task_or_404(task_id)
@@ -78,5 +81,5 @@ async def approve_task(task_id: str, payload: ApprovalRequest) -> TaskResponse:
     task.updated_at = utc_now()
 
     fake_db[task_id] = task
-    asyncio.create_task(process_task_pipeline(task_id))
+    background_tasks.add_task(process_task_pipeline, task_id)
     return task

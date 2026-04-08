@@ -19,7 +19,7 @@ FINAL_TIMEOUT_SECONDS = 480
 TOTAL_ROUNDS = 2
 
 TASK_PROMPTS = [
-    "写一个python脚本，实现输入两个数字，返回他们的和，将python文件保存在/home/wxr/proj/ai_coding_assistant/workspace中"
+    "写一个python脚本，实现输入两个数字，返回他们的和，文件命名为 sum.py"
 ]
 
 

@@ -25,6 +25,26 @@ client = AsyncOpenAI(
 ResponseModelT = TypeVar("ResponseModelT", bound=BaseModel)
 
 
+def strip_markdown_code_fence(content: str) -> str:
+    """清理大模型返回中的 Markdown 代码块包裹，仅保留 JSON 文本。"""
+
+    cleaned_content = content.strip()
+
+    if cleaned_content.startswith("```"):
+        lines = cleaned_content.splitlines()
+        if lines:
+            lines = lines[1:]
+        cleaned_content = "\n".join(lines).strip()
+
+    if cleaned_content.endswith("```"):
+        lines = cleaned_content.splitlines()
+        if lines and lines[-1].strip() == "```":
+            lines = lines[:-1]
+        cleaned_content = "\n".join(lines).strip()
+
+    return cleaned_content
+
+
 @retry(
     stop=stop_after_attempt(3),
     wait=wait_exponential(multiplier=1, min=2, max=10),
@@ -74,7 +94,8 @@ async def generate_structured_response(
         if not content:
             raise ValueError("LLM returned empty content.")
 
-        return response_model.model_validate_json(content)
+        cleaned_content = strip_markdown_code_fence(content)
+        return response_model.model_validate_json(cleaned_content)
     except Exception:
         logger.exception(
             "Failed to validate structured response for model '%s' and schema '%s'.",

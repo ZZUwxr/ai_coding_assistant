@@ -8,6 +8,7 @@ from app.agents.coder import run_coder_agent
 from app.agents.context import run_context_agent
 from app.agents.planner import run_planner_agent
 from app.agents.reviewer import run_reviewer_agent
+from app.agents.utils import safe_resolve_workspace_path
 from app.models.schemas import PlannerOutput, TaskResponse, TaskStatus, utc_now
 
 logger = logging.getLogger(__name__)
@@ -123,6 +124,27 @@ async def _run_processing_stage(task: TaskResponse) -> None:
         _persist_task(task)
 
         if review_report.is_passed:
+            for snippet in code_draft_output.code_snippets:
+                filename = snippet.get("filename", "").strip()
+                content = snippet.get("content", "")
+
+                if not filename:
+                    logger.error("Task '%s' produced a code snippet without filename.", task.task_id)
+                    raise ValueError("Generated code snippet is missing filename.")
+
+                try:
+                    target_path = safe_resolve_workspace_path(filename)
+                    target_path.parent.mkdir(parents=True, exist_ok=True)
+                    target_path.write_text(content, encoding="utf-8")
+                    logger.info("Task '%s' wrote generated code to '%s'.", task.task_id, target_path)
+                except Exception:
+                    logger.exception(
+                        "Task '%s' failed to write generated code to '%s'.",
+                        task.task_id,
+                        filename,
+                    )
+                    raise
+
             task.status = TaskStatus.COMPLETED
             _persist_task(task)
             return
