@@ -1,4 +1,6 @@
-# Multi-Agent AI Coding Assistant
+# Multi-Agent AI Coding 助手
+
+[English Version](./README.en.md)
 
 ![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)
 ![FastAPI](https://img.shields.io/badge/FastAPI-async-009688.svg)
@@ -6,42 +8,42 @@
 ![OpenAI Compatible](https://img.shields.io/badge/OpenAI-compatible-412991.svg)
 ![Status Prototype](https://img.shields.io/badge/status-prototype-orange.svg)
 
-> A FastAPI-based multi-agent backend for AI-assisted software delivery, featuring task planning, human approval, code context analysis, code generation, review loops, and benchmark-driven evaluation.
+> 一个基于 FastAPI 的多智能体后端服务，用于 AI 辅助的软件研发交付，覆盖任务规划、人工审批、代码上下文分析、代码生成、审查循环与基准评估。
 
-## English Overview
+## 项目简介
 
-This project implements a lightweight multi-agent coding workflow around four specialized agents:
+本项目实现了一套轻量级多智能体编码工作流，由四个专职 Agent 协同完成：
 
-- `Planner`: turns a natural-language requirement into a structured implementation plan
-- `Context`: reads real files from the local workspace and analyzes dependencies
-- `Coder`: generates structured code drafts based on plan and context
-- `Reviewer`: performs strict review and drives iterative repair loops
+- `Planner`：将自然语言需求拆解为结构化执行计划
+- `Context`：读取本地真实文件并分析依赖关系
+- `Coder`：结合计划与上下文生成结构化代码草稿
+- `Reviewer`：执行严格代码审查并驱动迭代修复
 
-The service exposes HTTP APIs for task creation, approval, and status tracking, and includes a benchmark script that simulates end-to-end execution against a running server.
+服务通过 HTTP API 提供任务创建、审批和状态追踪能力，并附带 `benchmark.py` 脚本用于对运行中的服务执行端到端评估。
 
-### Highlights
+## 核心特性
 
-- Human-in-the-loop approval between planning and execution
-- Real local file reading with workspace path safety checks
-- Structured LLM outputs validated by Pydantic models
-- Review-retry workflow with bounded retry attempts
-- Async benchmark harness for end-to-end performance evaluation
+- 规划阶段与执行阶段之间支持人工审批
+- 支持从本地工作区安全读取真实文件上下文
+- 大模型输出通过 Pydantic 结构化校验
+- 审查失败后可进入有限次重试循环
+- 提供异步 benchmark 脚本评估完整链路表现
 
-### Architecture
+## 架构图
 
 ```mermaid
 flowchart LR
-    User[User / Benchmark Client] --> API[FastAPI API]
-    API --> TaskStore[(In-Memory Task Store)]
-    API --> Workflow[Workflow Engine]
+    User[用户 / Benchmark 客户端] --> API[FastAPI API]
+    API --> TaskStore[(内存任务状态存储)]
+    API --> Workflow[工作流引擎]
 
     Workflow --> Planner[Planner Agent]
     Planner --> TaskStore
-    Workflow --> Approval[Human Approval]
+    Workflow --> Approval[人工审批]
     Approval --> Workflow
 
     Workflow --> Context[Context Agent]
-    Context --> Workspace[Workspace Files]
+    Context --> Workspace[Workspace 文件]
     Context --> Workflow
 
     Workflow --> Coder[Coder Agent]
@@ -51,67 +53,15 @@ flowchart LR
     Reviewer --> TaskStore
     Reviewer --> Workflow
 
-    Workflow --> Result[Completed / Failed Task]
+    Workflow --> Result[完成 / 失败]
 ```
 
-### Current Runtime Characteristics
+## 当前运行特征
 
-- Task state is stored in memory only
-- Generated code is returned via task payloads, not automatically written to disk
-- The service should run with a single worker in its current form
-- Best suited for local development, demos, and architectural validation
-
-## 中文说明
-
-基于 FastAPI、Pydantic v2 与 OpenAI 兼容接口实现的多智能体研发协作后端服务。系统通过 Planner、Context、Coder、Reviewer 四个 Agent 串联，完成需求拆解、上下文分析、代码生成与审查循环，并通过 HTTP API 暴露任务创建、审批和状态查询能力。
-
-当前版本已经具备：
-
-- 任务创建、审批、状态查询 API
-- 基于内存状态存储的工作流引擎
-- 多 Agent 串联的异步任务流转
-- Context Agent 对 `workspace/` 目录下真实文件的安全读取能力
-- 独立的 `benchmark.py` 自动化压测脚本
-
-需要注意：
-
-- 当前任务状态存储使用内存字典 `fake_db`，服务重启后任务会丢失
-- 当前生成代码默认保存在任务的 `code_draft` 字段中，不会自动写回磁盘
-- 由于状态保存在单进程内存中，部署时必须使用单 worker 运行
-
-## 核心能力
-
-### 1. Multi-Agent 工作流
-
-系统将一次研发任务拆成两个阶段：
-
-1. 规划阶段
-   - Planner 根据自然语言需求生成结构化计划
-   - 任务进入 `WAITING_FOR_APPROVAL`
-2. 执行阶段
-   - 用户审批通过后，Context 读取本地代码上下文
-   - Coder 生成代码草稿
-   - Reviewer 严格审查
-   - 最多循环 3 次，直到 `COMPLETED` 或 `FAILED`
-
-### 2. 真实文件上下文读取
-
-Context Agent 会基于 `WORKSPACE_DIR` 读取 Planner 输出的目标文件：
-
-- 支持读取已有文件内容
-- 对不存在文件标记为 `NEW_FILE`
-- 阻止路径穿越，例如 `../secret.txt`
-- 将真实代码内容和需求一并交给大模型分析
-
-### 3. 自动化评估基准
-
-`benchmark.py` 会通过真实 HTTP API 完整跑通任务生命周期：
-
-- 创建任务
-- 轮询等待审批
-- 自动审批
-- 轮询等待完成
-- 汇总完成率、耗时与 Reviewer 检出问题数
+- 任务状态目前仅保存在内存中
+- 生成代码会保存在任务结果中，不会自动写回磁盘
+- 当前版本应以单 worker 方式运行
+- 适合本地开发、演示和架构验证场景
 
 ## 项目结构
 
@@ -128,7 +78,8 @@ ai_coding_assistant/
 ├── benchmark.py           # 基准测试脚本
 ├── requirements.txt
 ├── .env.example
-└── README.md
+├── README.md
+└── README.en.md
 ```
 
 ## API 概览
@@ -190,11 +141,11 @@ Content-Type: application/json
 - Python 3.10+
 - Conda 或 venv
 - 可用的 OpenAI 兼容模型服务
-- 有权限访问对应模型的 API Key
+- 拥有对应模型访问权限的 API Key
 
 ## 配置说明
 
-项目通过 `.env` 读取运行配置。可以先从模板复制：
+项目通过 `.env` 文件读取运行配置。可以先从模板复制：
 
 ```bash
 cp .env.example .env
@@ -258,7 +209,7 @@ cp .env.example .env
 python -m uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
 ```
 
-启动成功后，可先验证健康状态：
+启动成功后，可以先验证健康检查：
 
 ```bash
 curl http://127.0.0.1:8000/
@@ -307,24 +258,24 @@ python benchmark.py
 - 轮询直到任务完成或失败
 - 输出完成率、中位时长和 Reviewer 检出改进点平均数
 
-你可以根据需要修改 [benchmark.py](/home/wxr/proj/ai_coding_assistant/benchmark.py) 中的：
+你可以根据需要修改 [benchmark.py](./benchmark.py) 中的：
 
 - `TASK_PROMPTS`
 - `TOTAL_ROUNDS`
 - `PLANNING_TIMEOUT_SECONDS`
 - `FINAL_TIMEOUT_SECONDS`
 
-## 部署建议
+## 部署指南
 
 ### 单机部署
 
-当前版本适合单机、单进程部署。原因是：
+当前版本适合单机、单进程部署。原因如下：
 
-- 任务状态使用进程内内存存储
+- 任务状态保存在进程内存中
 - 后台工作流通过 `asyncio.create_task(...)` 启动
 - 多 worker 模式下，各 worker 之间不会共享 `fake_db`
 
-因此部署时建议只启动 1 个 worker：
+因此建议以单 worker 方式运行：
 
 ```bash
 python -m uvicorn app.main:app --host 0.0.0.0 --port 8000
@@ -332,7 +283,7 @@ python -m uvicorn app.main:app --host 0.0.0.0 --port 8000
 
 ### 使用 systemd 部署
 
-可在 Linux 服务器上创建 `/etc/systemd/system/ai-coding-assistant.service`：
+可以在 Linux 服务器上创建 `/etc/systemd/system/ai-coding-assistant.service`：
 
 ```ini
 [Unit]
