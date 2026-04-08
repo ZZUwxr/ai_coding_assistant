@@ -1,1 +1,5 @@
-"""ai_coding_assistant 应用包初始化占位文件。"""
+"""应用顶层包导出。"""
+
+from app.main import app
+
+__all__ = ["app"]
