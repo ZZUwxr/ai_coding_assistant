@@ -1,4 +1,67 @@
-# Multi-Agent AI Coding 助手
+# Multi-Agent AI Coding Assistant
+
+![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)
+![FastAPI](https://img.shields.io/badge/FastAPI-async-009688.svg)
+![Pydantic v2](https://img.shields.io/badge/Pydantic-v2-E92063.svg)
+![OpenAI Compatible](https://img.shields.io/badge/OpenAI-compatible-412991.svg)
+![Status Prototype](https://img.shields.io/badge/status-prototype-orange.svg)
+
+> A FastAPI-based multi-agent backend for AI-assisted software delivery, featuring task planning, human approval, code context analysis, code generation, review loops, and benchmark-driven evaluation.
+
+## English Overview
+
+This project implements a lightweight multi-agent coding workflow around four specialized agents:
+
+- `Planner`: turns a natural-language requirement into a structured implementation plan
+- `Context`: reads real files from the local workspace and analyzes dependencies
+- `Coder`: generates structured code drafts based on plan and context
+- `Reviewer`: performs strict review and drives iterative repair loops
+
+The service exposes HTTP APIs for task creation, approval, and status tracking, and includes a benchmark script that simulates end-to-end execution against a running server.
+
+### Highlights
+
+- Human-in-the-loop approval between planning and execution
+- Real local file reading with workspace path safety checks
+- Structured LLM outputs validated by Pydantic models
+- Review-retry workflow with bounded retry attempts
+- Async benchmark harness for end-to-end performance evaluation
+
+### Architecture
+
+```mermaid
+flowchart LR
+    User[User / Benchmark Client] --> API[FastAPI API]
+    API --> TaskStore[(In-Memory Task Store)]
+    API --> Workflow[Workflow Engine]
+
+    Workflow --> Planner[Planner Agent]
+    Planner --> TaskStore
+    Workflow --> Approval[Human Approval]
+    Approval --> Workflow
+
+    Workflow --> Context[Context Agent]
+    Context --> Workspace[Workspace Files]
+    Context --> Workflow
+
+    Workflow --> Coder[Coder Agent]
+    Coder --> TaskStore
+
+    Workflow --> Reviewer[Reviewer Agent]
+    Reviewer --> TaskStore
+    Reviewer --> Workflow
+
+    Workflow --> Result[Completed / Failed Task]
+```
+
+### Current Runtime Characteristics
+
+- Task state is stored in memory only
+- Generated code is returned via task payloads, not automatically written to disk
+- The service should run with a single worker in its current form
+- Best suited for local development, demos, and architectural validation
+
+## 中文说明
 
 基于 FastAPI、Pydantic v2 与 OpenAI 兼容接口实现的多智能体研发协作后端服务。系统通过 Planner、Context、Coder、Reviewer 四个 Agent 串联，完成需求拆解、上下文分析、代码生成与审查循环，并通过 HTTP API 暴露任务创建、审批和状态查询能力。
 
