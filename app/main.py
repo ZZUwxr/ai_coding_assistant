@@ -2,11 +2,23 @@
 
 from __future__ import annotations
 
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 
 from app.api.routes import router as task_router
+from app.core.database import create_db_and_tables
 
-app = FastAPI(title="AI Coding Assistant API")
+
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+    """应用启动时初始化数据库表。"""
+
+    create_db_and_tables()
+    yield
+
+
+app = FastAPI(title="AI Coding Assistant API", lifespan=lifespan)
 
 
 @app.get("/")

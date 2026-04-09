@@ -4,5 +4,9 @@ __pycache__/
 .mypy_cache/
 .ruff_cache/
 .DS_Store
+ai_coding.db
+ai_coding.db-journal
+ai_coding.db-wal
+ai_coding.db-shm
 workspace/*
 !workspace/.gitkeep

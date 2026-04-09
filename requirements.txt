@@ -5,3 +5,4 @@ pydantic-settings
 openai
 tenacity
 httpx
+sqlmodel

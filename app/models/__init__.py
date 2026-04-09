@@ -6,9 +6,12 @@ from app.models.schemas import (
     ContextOutput,
     PlannerOutput,
     ReviewReport,
+    TaskRecord,
     TaskCreateRequest,
     TaskResponse,
     TaskStatus,
+    create_task_record,
+    task_record_to_response,
     utc_now,
 )
 
@@ -18,8 +21,11 @@ __all__ = [
     "ContextOutput",
     "PlannerOutput",
     "ReviewReport",
+    "TaskRecord",
     "TaskCreateRequest",
     "TaskResponse",
     "TaskStatus",
+    "create_task_record",
+    "task_record_to_response",
     "utc_now",
 ]

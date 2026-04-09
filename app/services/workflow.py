@@ -4,44 +4,75 @@ from __future__ import annotations
 
 import logging
 
+from sqlmodel import Session
+
 from app.agents.coder import run_coder_agent
 from app.agents.context import run_context_agent
 from app.agents.planner import run_planner_agent
 from app.agents.reviewer import run_reviewer_agent
 from app.agents.utils import safe_resolve_workspace_path
-from app.models.schemas import PlannerOutput, TaskResponse, TaskStatus, utc_now
+from app.core.database import engine
+from app.models.schemas import PlannerOutput, TaskRecord, TaskStatus, utc_now
 
 logger = logging.getLogger(__name__)
 
 MAX_REVIEW_RETRIES = 3
 
 
-def _get_task_storage() -> dict[str, TaskResponse]:
-    """延迟读取任务存储，避免与路由层形成循环导入。"""
+def _copy_task_state(source: TaskRecord, target: TaskRecord) -> None:
+    """将一个任务对象的状态拷贝到另一个任务对象。"""
 
-    from app.api.routes import fake_db
+    target.requirement = source.requirement
+    target.status = source.status
+    target.plan = source.plan
+    target.code_draft = source.code_draft
+    target.review_report = source.review_report
+    target.created_at = source.created_at
+    target.updated_at = source.updated_at
 
-    return fake_db
 
-
-def _get_task(task_id: str) -> TaskResponse | None:
+def _get_task(task_id: str) -> TaskRecord | None:
     """根据任务 ID 获取任务。"""
 
-    return _get_task_storage().get(task_id)
+    with Session(engine) as session:
+        task = session.get(TaskRecord, task_id)
+        if task is not None:
+            session.expunge(task)
+        return task
 
 
-def _persist_task(task: TaskResponse) -> None:
-    """将任务写回内存存储并刷新更新时间。"""
+def _persist_task(task: TaskRecord) -> None:
+    """将任务写回数据库并刷新更新时间。"""
 
     task.updated_at = utc_now()
-    _get_task_storage()[task.task_id] = task
+
+    with Session(engine) as session:
+        persisted = session.get(TaskRecord, task.task_id)
+        if persisted is None:
+            persisted = TaskRecord(
+                task_id=task.task_id,
+                requirement=task.requirement,
+                status=task.status,
+                plan=task.plan,
+                code_draft=task.code_draft,
+                review_report=task.review_report,
+                created_at=task.created_at,
+                updated_at=task.updated_at,
+            )
+        else:
+            _copy_task_state(task, persisted)
+
+        session.add(persisted)
+        session.commit()
+        session.refresh(persisted)
+        _copy_task_state(persisted, task)
 
 
-def _mark_task_failed(task: TaskResponse, reason: str) -> None:
+def _mark_task_failed(task: TaskRecord, reason: str) -> None:
     """将任务标记为失败，并写入失败原因。"""
 
     logger.exception("Task '%s' failed: %s", task.task_id, reason)
-    task.status = TaskStatus.FAILED
+    task.status = TaskStatus.FAILED.value
     task.review_report = {
         "is_passed": False,
         "issues_found": 1,
@@ -50,7 +81,7 @@ def _mark_task_failed(task: TaskResponse, reason: str) -> None:
     _persist_task(task)
 
 
-def _build_planner_requirement(task: TaskResponse) -> str:
+def _build_planner_requirement(task: TaskRecord) -> str:
     """将审批反馈合并到 Planner 输入中。"""
 
     planner_requirement = task.requirement
@@ -77,7 +108,7 @@ def _build_coder_requirement(base_requirement: str, review_comments: list[str] |
     )
 
 
-async def _run_planning_stage(task: TaskResponse) -> None:
+async def _run_planning_stage(task: TaskRecord) -> None:
     """执行规划阶段，生成计划并等待人工审批。"""
 
     planner_output = await run_planner_agent(
@@ -86,11 +117,11 @@ async def _run_planning_stage(task: TaskResponse) -> None:
     task.plan = planner_output.model_dump()
     task.code_draft = None
     task.review_report = None
-    task.status = TaskStatus.WAITING_FOR_APPROVAL
+    task.status = TaskStatus.WAITING_FOR_APPROVAL.value
     _persist_task(task)
 
 
-async def _run_processing_stage(task: TaskResponse) -> None:
+async def _run_processing_stage(task: TaskRecord) -> None:
     """执行上下文提取、编码与审查循环。"""
 
     if not task.plan:
@@ -145,7 +176,7 @@ async def _run_processing_stage(task: TaskResponse) -> None:
                     )
                     raise
 
-            task.status = TaskStatus.COMPLETED
+            task.status = TaskStatus.COMPLETED.value
             _persist_task(task)
             return
 
@@ -157,7 +188,7 @@ async def _run_processing_stage(task: TaskResponse) -> None:
             MAX_REVIEW_RETRIES,
         )
 
-    task.status = TaskStatus.FAILED
+    task.status = TaskStatus.FAILED.value
     if task.review_report is None:
         task.review_report = {
             "is_passed": False,
@@ -180,11 +211,11 @@ async def process_task_pipeline(task_id: str) -> None:
         return
 
     try:
-        if task.status == TaskStatus.PLANNING:
+        if task.status == TaskStatus.PLANNING.value:
             await _run_planning_stage(task)
             return
 
-        if task.status == TaskStatus.PROCESSING:
+        if task.status == TaskStatus.PROCESSING.value:
             await _run_processing_stage(task)
             return
 

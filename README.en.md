@@ -58,8 +58,9 @@ flowchart LR
 
 ## Current Runtime Characteristics
 
-- Task state is stored in memory only
-- Generated code is returned in task results and is not automatically written to disk
+- Task state is persisted in a local SQLite database
+- Generated code is stored in task results and written into `workspace` after review passes
+- Historical tasks survive service restarts, but in-flight background jobs are not resumed after restart
 - The current version should run with a single worker
 - Best suited for local development, demos, and architecture validation
 
@@ -271,9 +272,8 @@ You can customize the following fields in [benchmark.py](./benchmark.py):
 
 The current version is designed for single-machine, single-process deployment because:
 
-- task state is stored in process memory
-- background workflows are launched with `asyncio.create_task(...)`
-- multiple workers would not share the same `fake_db`
+- task state is persisted in SQLite, but background workflows are still launched via in-process `BackgroundTasks`
+- multiple workers could share the database, but job execution and workspace file writes are still easier to keep deterministic with a single worker
 
 For that reason, run it with a single worker:
 
@@ -316,7 +316,7 @@ sudo systemctl status ai-coding-assistant
 
 If you plan to evolve this into a production-grade service, prioritize the following:
 
-- replace `fake_db` with persistent task storage
+- introduce a more complete migration and task-audit strategy
 - move background workflows to a job queue or message queue
 - add per-agent timeout and cancellation control
 - write generated code back into `WORKSPACE_DIR`
@@ -324,10 +324,9 @@ If you plan to evolve this into a production-grade service, prioritize the follo
 
 ## Current Limitations
 
-- Task state is not persisted
-- Historical tasks are lost after a service restart
-- Generated output is only stored in the API task payload
-- The Context agent reads files but does not commit code changes
+- In-flight background tasks are not resumed across process restarts
+- Generated output is still stored in the API task payload
+- The Context agent reads files but does not commit Git changes
 - End-to-end latency is directly impacted by model response time
 
 ## Future Directions
