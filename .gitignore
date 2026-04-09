@@ -8,5 +8,9 @@ ai_coding.db
 ai_coding.db-journal
 ai_coding.db-wal
 ai_coding.db-shm
+db/*.db
+db/*.db-journal
+db/*.db-wal
+db/*.db-shm
 workspace/*
 !workspace/.gitkeep

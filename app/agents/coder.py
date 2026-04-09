@@ -18,6 +18,7 @@ async def run_coder_agent(
     execution_steps: list[str],
     context: ContextOutput,
     model: str | None = None,
+    task_id: str | None = None,
 ) -> CodeDraftOutput:
     """根据需求、计划和真实上下文生成完整代码文件内容。"""
 
@@ -38,4 +39,5 @@ async def run_coder_agent(
         user_message=user_message,
         response_model=CodeDraftOutput,
         model=model,
+        task_id=task_id,
     )

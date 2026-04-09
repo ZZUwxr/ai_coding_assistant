@@ -3,10 +3,17 @@
 from __future__ import annotations
 
 from collections.abc import Generator
+from pathlib import Path
 
 from sqlmodel import SQLModel, Session, create_engine
 
-DATABASE_URL = "sqlite:///./ai_coding.db"
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+DATABASE_DIR = PROJECT_ROOT / "db"
+DATABASE_FILE = DATABASE_DIR / "ai_coding.db"
+
+DATABASE_DIR.mkdir(parents=True, exist_ok=True)
+
+DATABASE_URL = f"sqlite:///{DATABASE_FILE.as_posix()}"
 
 engine = create_engine(
     DATABASE_URL,

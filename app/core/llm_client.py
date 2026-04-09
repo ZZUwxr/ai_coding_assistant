@@ -12,6 +12,7 @@ from pydantic import BaseModel
 from tenacity import before_sleep_log, retry, retry_if_not_exception_type, stop_after_attempt, wait_exponential
 
 from app.core.config import get_settings
+from app.services.pubsub import stream_manager
 
 logger = logging.getLogger(__name__)
 
@@ -57,6 +58,7 @@ async def generate_structured_response(
     user_message: str,
     response_model: type[ResponseModelT],
     model: str | None = None,
+    task_id: str | None = None,
 ) -> ResponseModelT:
     """调用大模型并将结果强制解析为指定的 Pydantic 模型。"""
 
@@ -77,6 +79,7 @@ async def generate_structured_response(
                 {"role": "user", "content": user_message},
             ],
             response_format={"type": "json_object"},
+            stream=True,
         )
     except Exception:
         logger.exception(
@@ -87,10 +90,21 @@ async def generate_structured_response(
         raise
 
     try:
-        if not response.choices:
-            raise ValueError("LLM returned no choices.")
+        accumulated_parts: list[str] = []
 
-        content = response.choices[0].message.content
+        async for chunk in response:
+            if not chunk.choices:
+                continue
+            delta = chunk.choices[0].delta
+            token = delta.content if delta else None
+            if not token:
+                continue
+            accumulated_parts.append(token)
+
+            if task_id:
+                await stream_manager.publish(task_id, event_type="llm_chunk", data=token)
+
+        content = "".join(accumulated_parts).strip()
         if not content:
             raise ValueError("LLM returned empty content.")
 

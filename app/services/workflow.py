@@ -13,6 +13,7 @@ from app.agents.reviewer import run_reviewer_agent
 from app.agents.utils import safe_resolve_workspace_path
 from app.core.database import engine
 from app.models.schemas import PlannerOutput, TaskRecord, TaskStatus, utc_now
+from app.services.pubsub import stream_manager
 
 logger = logging.getLogger(__name__)
 
@@ -68,7 +69,7 @@ def _persist_task(task: TaskRecord) -> None:
         _copy_task_state(persisted, task)
 
 
-def _mark_task_failed(task: TaskRecord, reason: str) -> None:
+async def _mark_task_failed(task: TaskRecord, reason: str) -> None:
     """将任务标记为失败，并写入失败原因。"""
 
     logger.exception("Task '%s' failed: %s", task.task_id, reason)
@@ -79,6 +80,7 @@ def _mark_task_failed(task: TaskRecord, reason: str) -> None:
         "comments": [reason],
     }
     _persist_task(task)
+    await stream_manager.publish(task.task_id, "status_update", TaskStatus.FAILED.value)
 
 
 def _build_planner_requirement(task: TaskRecord) -> str:
@@ -113,12 +115,14 @@ async def _run_planning_stage(task: TaskRecord) -> None:
 
     planner_output = await run_planner_agent(
         requirement=_build_planner_requirement(task),
+        task_id=task.task_id,
     )
     task.plan = planner_output.model_dump()
     task.code_draft = None
     task.review_report = None
     task.status = TaskStatus.WAITING_FOR_APPROVAL.value
     _persist_task(task)
+    await stream_manager.publish(task.task_id, "status_update", TaskStatus.WAITING_FOR_APPROVAL.value)
 
 
 async def _run_processing_stage(task: TaskRecord) -> None:
@@ -132,6 +136,7 @@ async def _run_processing_stage(task: TaskRecord) -> None:
         requirement=task.requirement,
         execution_steps=plan.execution_steps,
         target_files=plan.target_files,
+        task_id=task.task_id,
     )
 
     review_comments: list[str] | None = None
@@ -142,6 +147,7 @@ async def _run_processing_stage(task: TaskRecord) -> None:
             requirement=coder_requirement,
             execution_steps=plan.execution_steps,
             context=context_output,
+            task_id=task.task_id,
         )
         task.code_draft = code_draft_output.model_dump_json(indent=2)
         _persist_task(task)
@@ -150,6 +156,7 @@ async def _run_processing_stage(task: TaskRecord) -> None:
             requirement=task.requirement,
             plan=plan,
             code_draft=code_draft_output,
+            task_id=task.task_id,
         )
         task.review_report = review_report.model_dump()
         _persist_task(task)
@@ -178,6 +185,7 @@ async def _run_processing_stage(task: TaskRecord) -> None:
 
             task.status = TaskStatus.COMPLETED.value
             _persist_task(task)
+            await stream_manager.publish(task.task_id, "status_update", TaskStatus.COMPLETED.value)
             return
 
         review_comments = review_report.comments
@@ -200,6 +208,7 @@ async def _run_processing_stage(task: TaskRecord) -> None:
         comments.append(f"Task failed after {MAX_REVIEW_RETRIES} review attempts.")
         task.review_report["comments"] = comments
     _persist_task(task)
+    await stream_manager.publish(task.task_id, "status_update", TaskStatus.FAILED.value)
 
 
 async def process_task_pipeline(task_id: str) -> None:
@@ -212,10 +221,12 @@ async def process_task_pipeline(task_id: str) -> None:
 
     try:
         if task.status == TaskStatus.PLANNING.value:
+            await stream_manager.publish(task.task_id, "status_update", TaskStatus.PLANNING.value)
             await _run_planning_stage(task)
             return
 
         if task.status == TaskStatus.PROCESSING.value:
+            await stream_manager.publish(task.task_id, "status_update", TaskStatus.PROCESSING.value)
             await _run_processing_stage(task)
             return
 
@@ -225,4 +236,4 @@ async def process_task_pipeline(task_id: str) -> None:
             task.status,
         )
     except Exception as exc:
-        _mark_task_failed(task, f"Workflow pipeline error: {exc}")
+        await _mark_task_failed(task, f"Workflow pipeline error: {exc}")

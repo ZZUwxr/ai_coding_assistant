@@ -5,6 +5,7 @@ from __future__ import annotations
 from uuid import uuid4
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
+from fastapi.responses import StreamingResponse
 from sqlmodel import Session
 
 from app.core.database import get_session
@@ -19,6 +20,7 @@ from app.models.schemas import (
     utc_now,
 )
 from app.services.workflow import process_task_pipeline
+from app.services.pubsub import stream_manager
 
 router = APIRouter(prefix="/api/v1/tasks", tags=["tasks"])
 
@@ -64,6 +66,17 @@ async def get_task(task_id: str, session: Session = Depends(get_session)) -> Tas
 
     task = get_task_or_404(task_id, session)
     return task_record_to_response(task)
+
+
+@router.get("/{task_id}/stream")
+async def stream_task_events(task_id: str, session: Session = Depends(get_session)) -> StreamingResponse:
+    """返回指定任务的 SSE 事件流。"""
+
+    get_task_or_404(task_id, session)
+    return StreamingResponse(
+        stream_manager.subscribe(task_id),
+        media_type="text/event-stream",
+    )
 
 
 @router.post("/{task_id}/approve", response_model=TaskResponse)

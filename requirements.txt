@@ -6,3 +6,5 @@ openai
 tenacity
 httpx
 sqlmodel
+typer
+rich

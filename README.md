@@ -8,7 +8,7 @@
 ![OpenAI Compatible](https://img.shields.io/badge/OpenAI-compatible-412991.svg)
 ![Status Prototype](https://img.shields.io/badge/status-prototype-orange.svg)
 
-> 一个基于 FastAPI 的多智能体后端服务，用于 AI 辅助的软件研发交付，覆盖任务规划、人工审批、代码上下文分析、代码生成、审查循环与基准评估。
+> 一个基于 FastAPI 的多智能体 AI 编码系统，提供后端工作流引擎与终端交互式 CLI，覆盖任务规划、人工审批、代码上下文分析、代码生成、审查循环与基准评估。
 
 ## 项目简介
 
@@ -19,7 +19,7 @@
 - `Coder`：结合计划与上下文生成结构化代码草稿
 - `Reviewer`：执行严格代码审查并驱动迭代修复
 
-服务通过 HTTP API 提供任务创建、审批和状态追踪能力，并附带 `benchmark.py` 脚本用于对运行中的服务执行端到端评估。
+服务通过 HTTP API 提供任务创建、审批、状态追踪与 SSE 实时流能力；同时提供 `cli.py` 作为 Typer + Rich 交互式客户端，并附带 `benchmark.py` 用于端到端评估。
 
 ## 核心特性
 
@@ -27,15 +27,18 @@
 - 支持从本地工作区安全读取真实文件上下文
 - 大模型输出通过 Pydantic 结构化校验
 - 审查失败后可进入有限次重试循环
+- 支持 `SSE` 事件流，实时输出模型 token 与任务状态
+- 提供现代化 CLI 客户端（Typer + Rich），支持人类审批回环
 - 提供异步 benchmark 脚本评估完整链路表现
 
 ## 架构图
 
 ```mermaid
 flowchart LR
-    User[用户 / Benchmark 客户端] --> API[FastAPI API]
-    API --> TaskStore[(内存任务状态存储)]
+    User[用户 / Benchmark / CLI 客户端] --> API[FastAPI API]
+    API --> TaskStore[(SQLite Task DB)]
     API --> Workflow[工作流引擎]
+    API --> Stream[SSE Stream Manager]
 
     Workflow --> Planner[Planner Agent]
     Planner --> TaskStore
@@ -52,14 +55,16 @@ flowchart LR
     Workflow --> Reviewer[Reviewer Agent]
     Reviewer --> TaskStore
     Reviewer --> Workflow
+    Workflow --> Stream
 
     Workflow --> Result[完成 / 失败]
 ```
 
 ## 当前运行特征
 
-- 任务状态会持久化到本地 SQLite 数据库
+- 任务状态会持久化到本地 SQLite 数据库 `db/ai_coding.db`
 - 生成代码会保存在任务结果中，并在审查通过后写入 `workspace`
+- 支持通过 `/api/v1/tasks/{task_id}/stream` 订阅实时事件
 - 服务重启后可继续查询历史任务，但不会恢复重启前仍在运行中的后台任务
 - 当前版本应以单 worker 方式运行
 - 适合本地开发、演示和架构验证场景
@@ -73,9 +78,11 @@ ai_coding_assistant/
 │   ├── agents/            # Planner / Context / Coder / Reviewer
 │   ├── core/              # 配置与 LLM 客户端
 │   ├── models/            # Pydantic 数据模型
-│   ├── services/          # 工作流编排
+│   ├── services/          # 工作流编排与 SSE 发布订阅
 │   └── main.py            # FastAPI 入口
+├── db/                    # SQLite 数据库目录（ai_coding.db）
 ├── workspace/             # 被 AI 读取的代码工作区
+├── cli.py                 # 交互式 CLI 客户端（Typer + Rich）
 ├── benchmark.py           # 基准测试脚本
 ├── requirements.txt
 ├── .env.example
@@ -119,6 +126,13 @@ Content-Type: application/json
 
 ```http
 GET /api/v1/tasks/{task_id}
+```
+
+### 订阅任务实时事件（SSE）
+
+```http
+GET /api/v1/tasks/{task_id}/stream
+Accept: text/event-stream
 ```
 
 ### 审批任务
@@ -240,6 +254,34 @@ curl -X POST http://127.0.0.1:8000/api/v1/tasks/<task_id>/approve \
   -d '{"is_approved": true}'
 ```
 
+### 订阅任务事件流（SSE）
+
+```bash
+curl -N http://127.0.0.1:8000/api/v1/tasks/<task_id>/stream
+```
+
+## CLI 交互客户端
+
+启动服务后，在另一个终端运行：
+
+```bash
+cd /home/wxr/proj/ai_coding_assistant
+python cli.py
+```
+
+CLI 支持：
+
+- Rich 欢迎界面与自然语言需求输入
+- 规划结果渲染与人工审批回环
+- 模型 token 与任务状态实时流式输出
+- 任务终态（完成/失败）高亮展示
+
+可选参数：
+
+```bash
+python cli.py --base-url http://127.0.0.1:8000 --planning-timeout 180 --final-timeout 480 --poll-interval 2
+```
+
 ## Benchmark 使用方法
 
 先确保服务已经运行，然后在另一个终端执行：
@@ -319,7 +361,7 @@ sudo systemctl status ai-coding-assistant
 - 引入更成熟的数据库迁移体系与任务审计能力
 - 将后台工作流迁移到消息队列或任务队列系统
 - 为 Agent 调用增加单步超时与取消机制
-- 将生成代码真正写入 `WORKSPACE_DIR`
+- 增加生成代码回滚与审计能力
 - 增加鉴权、审计日志、限流和监控
 
 ## 当前限制
@@ -331,7 +373,7 @@ sudo systemctl status ai-coding-assistant
 
 ## 后续演进方向
 
-- 接入数据库保存任务与审批记录
+- 将 SQLite 平滑升级到 PostgreSQL 等生产级数据库
 - 接入对象存储保存中间工件
 - 增加代码自动落盘与 Git 提交能力
 - 支持更细粒度的 Agent 可观测性

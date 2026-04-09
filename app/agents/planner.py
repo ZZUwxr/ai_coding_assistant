@@ -18,6 +18,7 @@ async def run_planner_agent(
     requirement: str,
     context_files: list[str] | None = None,
     model: str | None = None,
+    task_id: str | None = None,
 ) -> PlannerOutput:
     """根据研发需求生成结构化执行计划。"""
 
@@ -34,4 +35,5 @@ async def run_planner_agent(
         user_message=user_message,
         response_model=PlannerOutput,
         model=model,
+        task_id=task_id,
     )

@@ -28,6 +28,7 @@ async def run_context_agent(
     execution_steps: list[str],
     target_files: list[str],
     model: str | None = None,
+    task_id: str | None = None,
 ) -> ContextOutput:
     """读取目标文件真实内容，并生成给 Coder 使用的上下文分析。"""
 
@@ -48,6 +49,7 @@ async def run_context_agent(
         user_message=user_message,
         response_model=ContextAnalysisOutput,
         model=model,
+        task_id=task_id,
     )
 
     return ContextOutput(

@@ -18,6 +18,7 @@ async def run_reviewer_agent(
     plan: PlannerOutput,
     code_draft: CodeDraftOutput,
     model: str | None = None,
+    task_id: str | None = None,
 ) -> ReviewReport:
     """根据需求、计划和代码实现生成结构化审查报告。"""
 
@@ -40,4 +41,5 @@ async def run_reviewer_agent(
         user_message=user_message,
         response_model=ReviewReport,
         model=model,
+        task_id=task_id,
     )

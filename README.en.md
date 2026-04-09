@@ -8,7 +8,7 @@
 ![OpenAI Compatible](https://img.shields.io/badge/OpenAI-compatible-412991.svg)
 ![Status Prototype](https://img.shields.io/badge/status-prototype-orange.svg)
 
-> A FastAPI-based multi-agent backend for AI-assisted software delivery, covering task planning, human approval, code context analysis, code generation, review loops, and benchmark-driven evaluation.
+> A FastAPI-based multi-agent AI coding system with both backend workflow APIs and an interactive terminal CLI, covering planning, human approval, code context analysis, code generation, review loops, and benchmark evaluation.
 
 ## Project Overview
 
@@ -19,7 +19,7 @@ This project implements a lightweight multi-agent coding workflow powered by fou
 - `Coder`: generates structured code drafts from plan and context
 - `Reviewer`: performs strict code review and drives iterative repair loops
 
-The service exposes HTTP APIs for task creation, approval, and status tracking, and includes a `benchmark.py` script for end-to-end evaluation against a running server.
+The service exposes HTTP APIs for task creation, approval, status tracking, and SSE streaming; it also includes `cli.py` (Typer + Rich interactive client) and `benchmark.py` for end-to-end evaluation against a running server.
 
 ## Key Features
 
@@ -27,15 +27,18 @@ The service exposes HTTP APIs for task creation, approval, and status tracking, 
 - Secure local workspace file reading for code context analysis
 - Structured LLM outputs validated by Pydantic models
 - Bounded review-retry workflow for failed code reviews
+- SSE event streaming for real-time model token and status output
+- Interactive CLI client (Typer + Rich) with human-approval loop
 - Async benchmark script for full pipeline evaluation
 
 ## Architecture
 
 ```mermaid
 flowchart LR
-    User[User / Benchmark Client] --> API[FastAPI API]
-    API --> TaskStore[(In-Memory Task Store)]
+    User[User / Benchmark / CLI Client] --> API[FastAPI API]
+    API --> TaskStore[(SQLite Task DB)]
     API --> Workflow[Workflow Engine]
+    API --> Stream[SSE Stream Manager]
 
     Workflow --> Planner[Planner Agent]
     Planner --> TaskStore
@@ -52,14 +55,16 @@ flowchart LR
     Workflow --> Reviewer[Reviewer Agent]
     Reviewer --> TaskStore
     Reviewer --> Workflow
+    Workflow --> Stream
 
     Workflow --> Result[Completed / Failed Task]
 ```
 
 ## Current Runtime Characteristics
 
-- Task state is persisted in a local SQLite database
+- Task state is persisted in a local SQLite database at `db/ai_coding.db`
 - Generated code is stored in task results and written into `workspace` after review passes
+- Real-time events are available from `/api/v1/tasks/{task_id}/stream`
 - Historical tasks survive service restarts, but in-flight background jobs are not resumed after restart
 - The current version should run with a single worker
 - Best suited for local development, demos, and architecture validation
@@ -73,9 +78,11 @@ ai_coding_assistant/
 │   ├── agents/            # Planner / Context / Coder / Reviewer
 │   ├── core/              # Configuration and LLM client
 │   ├── models/            # Pydantic data models
-│   ├── services/          # Workflow orchestration
+│   ├── services/          # Workflow orchestration and SSE pub/sub
 │   └── main.py            # FastAPI entrypoint
+├── db/                    # SQLite database directory (ai_coding.db)
 ├── workspace/             # Code workspace read by AI
+├── cli.py                 # Interactive CLI client (Typer + Rich)
 ├── benchmark.py           # Benchmark script
 ├── requirements.txt
 ├── .env.example
@@ -119,6 +126,13 @@ Request body:
 
 ```http
 GET /api/v1/tasks/{task_id}
+```
+
+### Subscribe to Task Events (SSE)
+
+```http
+GET /api/v1/tasks/{task_id}/stream
+Accept: text/event-stream
 ```
 
 ### Approve Task
@@ -240,6 +254,34 @@ curl -X POST http://127.0.0.1:8000/api/v1/tasks/<task_id>/approve \
   -d '{"is_approved": true}'
 ```
 
+### Subscribe to task stream (SSE)
+
+```bash
+curl -N http://127.0.0.1:8000/api/v1/tasks/<task_id>/stream
+```
+
+## Interactive CLI
+
+After the API service is up, run the CLI in another terminal:
+
+```bash
+cd /home/wxr/proj/ai_coding_assistant
+python cli.py
+```
+
+The CLI provides:
+
+- Rich welcome screen and natural-language requirement input
+- Plan rendering with human-in-the-loop approval
+- Real-time streaming display of model tokens and task status
+- Highlighted final state output (completed / failed)
+
+Optional flags:
+
+```bash
+python cli.py --base-url http://127.0.0.1:8000 --planning-timeout 180 --final-timeout 480 --poll-interval 2
+```
+
 ## Benchmark Usage
 
 Make sure the service is already running, then execute the benchmark in another terminal:
@@ -319,7 +361,7 @@ If you plan to evolve this into a production-grade service, prioritize the follo
 - introduce a more complete migration and task-audit strategy
 - move background workflows to a job queue or message queue
 - add per-agent timeout and cancellation control
-- write generated code back into `WORKSPACE_DIR`
+- add generated-code rollback and audit capability
 - add authentication, audit logging, rate limiting, and monitoring
 
 ## Current Limitations
@@ -331,7 +373,7 @@ If you plan to evolve this into a production-grade service, prioritize the follo
 
 ## Future Directions
 
-- integrate a database for tasks and approval records
+- migrate from SQLite to a production database such as PostgreSQL
 - use object storage for intermediate artifacts
 - add automatic code materialization and Git commit support
 - improve observability across agent execution
