@@ -11,6 +11,8 @@ from app.models.schemas import ContextOutput
 CONTEXT_SYSTEM_PROMPT = (
     "你是一个代码分析师。"
     "请根据开发计划与现有代码，提取 Coder 需要的前置代码上下文和依赖关系。"
+    "如果现有上下文不足，你可以调用工具查看 workspace 中的目录结构、读取文件片段或执行受限 shell 命令。"
+    "仅在补充上下文确有必要时调用工具。"
     "不要生成解决当前需求的具体代码。"
 )
 
@@ -34,14 +36,13 @@ async def run_context_agent(
 
     relevant_code = await read_workspace_files(target_files)
     user_message = (
-        "Analyze the following requirement and the real code files collected from the workspace.\n\n"
-        f"Requirement:\n{requirement}\n\n"
-        "Execution steps:\n"
+        "请结合以下需求与从 workspace 收集到的真实代码文件进行分析。\n\n"
+        f"需求：\n{requirement}\n\n"
+        "执行步骤：\n"
         f"{format_execution_steps(execution_steps)}\n\n"
-        "Relevant code and file states:\n"
+        "相关代码与文件状态：\n"
         f"{format_file_payloads(relevant_code)}\n\n"
-        "Identify key dependencies, likely function or class touch points, integration constraints, "
-        "and conflicts the Coder should pay attention to."
+        "请识别关键依赖、可能需要修改的函数或类、集成约束，以及 Coder 需要重点注意的冲突点。"
     )
 
     analysis_output = await generate_structured_response(
@@ -50,6 +51,7 @@ async def run_context_agent(
         response_model=ContextAnalysisOutput,
         model=model,
         task_id=task_id,
+        enable_tools=True,
     )
 
     return ContextOutput(

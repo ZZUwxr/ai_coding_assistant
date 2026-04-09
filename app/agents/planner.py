@@ -23,11 +23,11 @@ async def run_planner_agent(
     """根据研发需求生成结构化执行计划。"""
 
     user_message = (
-        "Analyze the following software development requirement and produce a structured plan.\n\n"
-        f"Requirement:\n{requirement}\n\n"
-        "Known context files in the workspace:\n"
+        "请分析以下软件开发需求，并输出结构化执行计划。\n\n"
+        f"需求：\n{requirement}\n\n"
+        "workspace 中已知的上下文文件：\n"
         f"{format_path_list(context_files)}\n\n"
-        "Return practical execution steps and file paths that should be edited or created."
+        "请返回可执行的步骤，以及需要编辑或创建的文件路径。"
     )
 
     return await generate_structured_response(

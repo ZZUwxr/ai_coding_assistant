@@ -104,7 +104,7 @@ async def approve_task(
         task.review_report = None
         task.plan = {
             **(task.plan or {}),
-            "approval_feedback": payload.feedback or "Human approval rejected without detailed feedback.",
+            "approval_feedback": payload.feedback or "人工审批未通过，且未提供详细反馈。",
         }
 
     task.updated_at = utc_now()

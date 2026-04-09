@@ -91,7 +91,7 @@ def _build_planner_requirement(task: TaskRecord) -> str:
     if approval_feedback:
         planner_requirement = (
             f"{planner_requirement}\n\n"
-            "Additional human feedback for replanning:\n"
+            "用于重新规划的人工反馈：\n"
             f"{approval_feedback}"
         )
     return planner_requirement
@@ -105,7 +105,7 @@ def _build_coder_requirement(base_requirement: str, review_comments: list[str] |
 
     return (
         f"{base_requirement}\n\n"
-        "Previous review feedback that must be fixed in this attempt:\n"
+        "本轮必须修复的上一轮审查意见：\n"
         + "\n".join(f"- {comment}" for comment in review_comments)
     )
 
