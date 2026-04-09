@@ -269,6 +269,19 @@ cd /home/wxr/proj/ai_coding_assistant
 python cli.py
 ```
 
+Banner shown on startup (`cli.py` ASCII banner):
+
+```python
+r"""
+    ___    ____      ____          ___
+   /   |  /  _/     / __ \____ ___/ (_)___  ____ _
+  / /| |  / /______/ / / / __ `/ __  / / __ \/ __ `/
+ / ___ |_/ /_____/ /_/ / /_/ / /_/ / / / / / /_/ /
+/_/  |_/___/    /_____/\__,_/\__,_/_/_/ /_/\__, /
+                                           /____/
+"""
+```
+
 The CLI provides:
 
 - Rich welcome screen and natural-language requirement input
