@@ -29,6 +29,7 @@ The service exposes HTTP APIs for task creation, approval, status tracking, and 
 - Bounded review-retry workflow for failed code reviews
 - SSE event streaming for real-time model token and status output
 - Interactive CLI client (Typer + Rich) with human-approval loop
+- Built-in Tools (Function Calling) foundation for on-demand workspace inspection
 - Async benchmark script for full pipeline evaluation
 
 ## Architecture
@@ -294,6 +295,34 @@ Optional flags:
 ```bash
 python cli.py --base-url http://127.0.0.1:8000 --planning-timeout 180 --final-timeout 480 --poll-interval 2
 ```
+
+## Tool Calling System
+
+The current version includes a built-in OpenAI Tools (Function Calling) foundation. The main implementation lives in:
+
+- `app/core/tools.py`: tool registry, tool functions, and OpenAI tools schema
+- `app/core/llm_client.py`: automatic tool-calling loop and final JSON normalization
+
+Built-in tools:
+
+- `list_directory(path)`: list files and subdirectories under a workspace-relative directory
+- `read_file_content(file_path, start_line=1, end_line=-1)`: read a workspace-relative file with optional line slicing
+- `run_shell_command(command)`: run a restricted shell command from the workspace root with a 15-second timeout
+
+Agents currently using tools:
+
+- `Context`
+- `Coder`
+- `Reviewer`
+
+Implementation notes:
+
+- Tool execution is strictly confined to `WORKSPACE_DIR`, with path traversal blocked
+- Tool failures are returned to the model as `tool` message content so the model can recover
+- To handle provider-specific compatibility issues, `llm_client` uses a two-phase strategy:
+- Phase 1 allows the model to freely issue tool calls
+- Phase 2 requests the final strict JSON output only after tool usage is complete
+- It also normalizes provider-specific outputs such as `{"properties": {...}}` and tool-call payloads embedded in `message.content`
 
 ## Benchmark Usage
 

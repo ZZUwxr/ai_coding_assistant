@@ -29,6 +29,7 @@
 - 审查失败后可进入有限次重试循环
 - 支持 `SSE` 事件流，实时输出模型 token 与任务状态
 - 提供现代化 CLI 客户端（Typer + Rich），支持人类审批回环
+- 内置 Tools（Function Calling）基础架构，支持按需访问工作区工具
 - 提供异步 benchmark 脚本评估完整链路表现
 
 ## 架构图
@@ -294,6 +295,34 @@ CLI 支持：
 ```bash
 python cli.py --base-url http://127.0.0.1:8000 --planning-timeout 180 --final-timeout 480 --poll-interval 2
 ```
+
+## 工具调用系统
+
+当前版本已经内置 OpenAI Tools（Function Calling）基础架构，核心实现位于：
+
+- `app/core/tools.py`：工具注册表、工具函数、OpenAI tools schema
+- `app/core/llm_client.py`：自动处理工具调用循环与最终 JSON 归一化
+
+当前内置工具：
+
+- `list_directory(path)`：列出 workspace 相对目录下的文件和子目录
+- `read_file_content(file_path, start_line=1, end_line=-1)`：读取 workspace 相对文件内容，支持行号截取
+- `run_shell_command(command)`：在 workspace 根目录执行受限 shell 命令，带 15 秒超时
+
+已启用工具能力的 Agent：
+
+- `Context`
+- `Coder`
+- `Reviewer`
+
+设计说明：
+
+- 工具执行严格限制在 `WORKSPACE_DIR` 内，阻止路径穿越
+- 工具执行异常会作为 `tool` 消息内容回传给模型，便于模型自我修正
+- 针对部分 OpenAI 兼容供应商的差异行为，`llm_client` 采用“两阶段”策略：
+- 第一阶段允许模型自由发起工具调用
+- 第二阶段在工具调用结束后，单独请求最终严格 JSON 输出
+- 兼容部分供应商返回 `{"properties": {...}}` 或将工具调用塞进 `message.content` 的情况
 
 ## Benchmark 使用方法
 
